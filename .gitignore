@@ -1,2 +1,4 @@
 venv/
 .env
+data/raw
+CLAUDE.local.md
