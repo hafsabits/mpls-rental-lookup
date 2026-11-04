@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rental Records · Minneapolis</title>
+<meta name="description" content="Look up any licensed rental in Minneapolis: its license, who owns it, and its history of city code violations.">
+<style>
+  :root { --bg:#ffffff; --fg:#1d1d1f; --muted:#6b7280; --line:#e5e7eb; --card:#f8fafc; --accent:#2563eb; --bad:#b91c1c; --ok:#15803d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --fg:#e8eaed; --muted:#9aa0a6; --line:#2a2e35; --card:#171a21; --accent:#7aa2ff; --bad:#f87171; --ok:#4ade80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { margin:0 0 4px; font-size:28px; }
+  h2 { margin:8px 0; }
+  .muted { color:var(--muted); font-size:14px; }
+  nav { display:flex; gap:20px; border-bottom:1px solid var(--line); margin:20px 0; overflow-x:auto; }
+  nav a { padding:8px 0; color:var(--muted); text-decoration:none; border-bottom:2px solid transparent; white-space:nowrap; }
+  nav a.active { color:var(--fg); border-color:var(--accent); }
+  input[type=search] { width:100%; padding:12px 14px; font-size:16px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); }
+  a.link, .results a { color:var(--accent); text-decoration:none; }
+  .results div { padding:8px 0; border-bottom:1px solid var(--line); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin:16px 0; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
+  .stat b { display:block; font-size:22px; }
+  .stat span { color:var(--muted); font-size:13px; }
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  .open { color:var(--bad); font-weight:600; }
+  .good { color:var(--ok); }
+  .note { font-size:13px; color:var(--muted); margin-top:8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .chip { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🏠 Rental Records</h1>
+  <div>Look up any licensed rental in Minneapolis: its license, who owns it, and its history of city code violations.</div>
+  <div class="muted" id="updated">Loading data…</div>
+  <nav>
+    <a href="#" data-tab="search">Look up an address</a>
+    <a href="#owners" data-tab="owners">Largest owners</a>
+    <a href="#about" data-tab="about">About</a>
+  </nav>
+  <section id="view"></section>
+</main>
+
+<script>
+const state = { properties: [], owners: [], ownersByKey: new Map(), shards: new Map(), query: "" };
+const view = document.getElementById("view");
+
+// Escape text from the data so names can never be read as HTML
+const esc = (s) => String(s ?? "—").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (n, digits = 0) => n == null ? "—" :
+  Number(n).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+
+async function loadJSON(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
+  return res.json();
+}
+
+async function loadViolations(apn) {
+  const key = apn.slice(-2);
+  if (!state.shards.has(key)) {
+    state.shards.set(key, await loadJSON(`data/violations/${encodeURIComponent(key)}.json`));
+  }
+  return state.shards.get(key)[apn] || [];
+}
+
+function setActiveTab(tab) {
+  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
+}
+
+// Each page has its own link (#p=..., #o=...), so the back button and shared links work
+function route() {
+  const hash = decodeURIComponent(location.hash.slice(1));
+  const i = hash.indexOf("=");
+  const kind = i === -1 ? hash : hash.slice(0, i);
+  const value = i === -1 ? "" : hash.slice(i + 1);
+  setActiveTab(kind === "owners" || kind === "o" ? "owners" : kind === "about" ? "about" : "search");
+  window.scrollTo(0, 0);
+  if (kind === "p") return showProperty(value);
+  if (kind === "o") return showOwner(value);
+  if (kind === "owners") return showOwners();
+  if (kind === "about") return showAbout();
+  return showSearch();
+}
+
+function showSearch() {
+  view.innerHTML = `
+    <input type="search" id="q" autocomplete="off"
+           placeholder="Street address, e.g. 2400 Lyndale or Lake St" value="${esc(state.query)}">
+    <div class="results" id="results"></div>`;
+  const input = document.getElementById("q");
+  input.addEventListener("input", () => { state.query = input.value; renderResults(); });
+  input.focus();
+  renderResults();
+}
+
+function renderResults() {
+  const q = state.query.trim().toUpperCase();
+  const box = document.getElementById("results");
+  if (q.length < 3) {
+    box.innerHTML = `<p class="muted">Type at least 3 characters. Short searches work best, like the house number and street name.</p>`;
+    return;
+  }
+  const matches = state.properties.filter((p) => p.address && p.address.toUpperCase().includes(q)).slice(0, 50);
+  if (!matches.length) {
+    box.innerHTML = `<p class="muted">No licensed rentals match. Try fewer words, like "2400 Lyndale".</p>`;
+    return;
+  }
+  box.innerHTML =
+    `<p class="muted">${matches.length === 50 ? "First 50 matches" : `${matches.length} matches`}</p>` +
+    matches.map((p) => `
+      <div>
+        <a href="#p=${encodeURIComponent(p.license_number)}">${esc(p.address)}</a>
+        <span class="muted">· ${esc(p.owner_name)} · ${num(p.units)} units</span>
+      </div>`).join("");
+}
+
+async function showProperty(license) {
+  const p = state.properties.find((x) => x.license_number === license);
+  if (!p) {
+    view.innerHTML = `<p>Property not found. <a class="link" href="#">Back to search</a></p>`;
+    return;
+  }
+  const owner = state.ownersByKey.get(p.owner_key);
+  const ownerLink = owner
+    ? `<a class="link" href="#o=${encodeURIComponent(p.owner_key)}">${esc(p.owner_name)}</a>
+       <span class="muted">(${num(owner.properties)} properties)</span>`
+    : esc(p.owner_name);
+
+  view.innerHTML = `
+    <p><a class="link" href="#">← Back to search</a></p>
+    <h2>${esc(p.address)}</h2>
+    <div class="stats">
+      ${stat(esc(p.tier), "License tier")}
+      ${stat(num(p.units), "Units")}
+      ${stat(num(p.violations_open), "Open violations")}
+      ${stat(num(p.violations_2yr), "Violations, last 2 years")}
+      ${stat(num(p.violations_2yr_per_unit, 2), "Per unit, last 2 years")}
+    </div>
+    <p>
+      <b>Owner:</b> ${ownerLink}<br>
+      <b>License:</b> ${esc(p.license_number)} · ${esc(p.status)} · expires ${esc(p.expiration_date)}<br>
+      <b>Neighborhood:</b> ${esc(p.neighborhood)}
+    </p>
+    <h3>Code violations since 2016</h3>
+    <div id="violations" class="muted">Loading…</div>
+    <p class="note">Violations are recorded by parcel and may predate the current owner. Commercial fire inspections are not included.</p>`;
+
+  try {
+    renderViolations(p.apn ? await loadViolations(p.apn) : []);
+  } catch (err) {
+    const box = document.getElementById("violations");
+    if (box) box.innerHTML = `<p class="open">Could not load violations. ${esc(err.message)}</p>`;
+  }
+}
+
+function renderViolations(rows) {
+  const box = document.getElementById("violations");
+  if (!box) return; // the visitor already moved to another page
+  box.className = "";
+  if (!rows.length) {
+    box.innerHTML = `<p class="good">No code violations on record for this parcel since 2016.</p>`;
+    return;
+  }
+  const counts = {};
+  rows.forEach((r) => { counts[r[1]] = (counts[r[1]] || 0) + 1; });
+  box.innerHTML = `
+    <div class="chips">
+      ${Object.entries(counts).sort((a, b) => b[1] - a[1])
+        .map(([category, n]) => `<span class="chip">${esc(category)}: ${num(n)}</span>`).join("")}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Date</th><th>Category</th><th>Violation</th><th>Status</th><th>Resolved</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <td>${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td>${esc(r[3])}</td>
+          <td>${r[4] ? esc(r[4]) : '<span class="open">Open</span>'}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>`;
+}
+
+function showOwner(key) {
+  const o = state.ownersByKey.get(key);
+  if (!o) {
+    view.innerHTML = `<p>Owner not found. <a class="link" href="#owners">See largest owners</a></p>`;
+    return;
+  }
+  const props = state.properties
+    .filter((p) => p.owner_key === key)
+    .sort((a, b) => (b.violations_2yr || 0) - (a.violations_2yr || 0));
+
+  view.innerHTML = `
+    <p><a class="link" href="#owners">← Largest owners</a></p>
+    <h2>${esc(o.owner_name)}</h2>
+    <div class="stats">
+      ${stat(num(o.properties), "Properties")}
+      ${stat(num(o.units), "Units")}
+      ${stat(num(o.violations_open), "Open violations")}
+      ${stat(num(o.violations_2yr_per_unit, 2), "Violations per unit, last 2 years")}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Address</th><th>Units</th><th>Tier</th><th>Open</th><th>Last 2 yrs</th><th>Per unit</th></tr></thead>
+      <tbody>${props.map((p) => `
+        <tr>
+          <td><a class="link" href="#p=${encodeURIComponent(p.license_number)}">${esc(p.address)}</a></td>
+          <td>${num(p.units)}</td><td>${esc(p.tier)}</td><td>${num(p.violations_open)}</td>
+          <td>${num(p.violations_2yr)}</td><td>${num(p.violations_2yr_per_unit, 2)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>
+    <p class="note">Owners are matched by the name on the rental license. One landlord may use several LLC names that are not yet grouped together.</p>`;
+}
+
+function showOwners() {
+  const top = state.owners.slice(0, 50);
+  view.innerHTML = `
+    <p>The largest rental owners in Minneapolis, by number of licensed units. Click a name to see their properties.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Owner</th><th>Properties</th><th>Units</th><th>Open violations</th><th>Per unit, last 2 yrs</th></tr></thead>
+      <tbody>${top.map((o) => `
+        <tr>
+          <td><a class="link" href="#o=${encodeURIComponent(o.owner_key)}">${esc(o.owner_name)}</a></td>
+          <td>${num(o.properties)}</td><td>${num(o.units)}</td>
+          <td>${num(o.violations_open)}</td><td>${num(o.violations_2yr_per_unit, 2)}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table></div>`;
+}
+
+function showAbout() {
+  view.innerHTML = `
+    <p><b>What this is.</b> A free tool that brings Minneapolis public records about rental housing into one place,
+    so renters can check a property and its owner before signing a lease.</p>
+    <p><b>Data sources.</b> City of Minneapolis Open Data: Active Rental Licenses and code violation cases
+    (2016 to present). Updated weekly.</p>
+    <p><b>How to read it.</b> Violations include routine inspection findings, many of them minor. Open violations
+    and recent ones matter most. "Per unit" adjusts for building size, so large buildings and duplexes compare fairly.</p>
+    <p><b>Privacy.</b> Owner phone numbers and emails published by the city are left out on purpose.</p>
+    <p><b>Disclaimer.</b> This data comes from public records and may contain errors or be out of date.
+    It is not legal advice. Violations may predate the current owner.</p>`;
+}
+
+async function init() {
+  try {
+    const [meta, properties, owners] = await Promise.all([
+      loadJSON("data/meta.json"),
+      loadJSON("data/properties.json"),
+      loadJSON("data/owners.json"),
+    ]);
+    state.properties = properties;
+    state.owners = owners;
+    owners.forEach((o) => state.ownersByKey.set(o.owner_key, o));
+    document.getElementById("updated").textContent =
+      `Data from the City of Minneapolis · last updated ${meta.last_updated}`;
+    window.addEventListener("hashchange", route);
+    route();
+  } catch (err) {
+    view.innerHTML = `<p class="open">Sorry, the data could not be loaded. ${esc(err.message)}</p>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>

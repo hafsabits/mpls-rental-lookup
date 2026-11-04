@@ -8,3 +8,4 @@ __pycache__/
 docs/learning-log.md
 .streamlit/secrets.toml
 *.json.key
+site/data/
