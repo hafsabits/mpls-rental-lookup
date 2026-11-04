@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 
 from src.fetch import fetch_all
 from src.load_bigquery import load_dataframe
+from src.build_tables import build_tables
 
 BASE_URL = "https://services.arcgis.com/afSMGVsC7QlRK1kZ/arcgis/rest/services"
 RAW_DIR = Path("data/raw")
@@ -79,6 +80,7 @@ def main() -> None:
     bq_dataset = os.environ.get("BQ_DATASET", "mpls_rentals")
 
     for dataset in DATASETS:
+        build_tables(project_id, bq_dataset)
         run(dataset, project_id, bq_dataset)
     print("\nDone.")
 

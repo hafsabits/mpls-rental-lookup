@@ -5,3 +5,6 @@ CLAUDE.local.md
 notebooks/
 __pycache__/
 *.pyc
+docs/learning-log.md
+.streamlit/secrets.toml
+*.json.key
