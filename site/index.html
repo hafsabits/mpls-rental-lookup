@@ -4,54 +4,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rental Records · Minneapolis</title>
-<meta name="description" content="Look up any licensed rental in Minneapolis: its license, who owns it, and its history of city code violations.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+<meta name="description" content="Check a Minneapolis rental before applying: its license, its condition record, and any open city code violations.">
 <style>
-  :root { --bg:#ffffff; --fg:#1d1d1f; --muted:#6b7280; --line:#e5e7eb; --card:#f8fafc; --accent:#2563eb; --bad:#b91c1c; --ok:#15803d; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f1115; --fg:#e8eaed; --muted:#9aa0a6; --line:#2a2e35; --card:#171a21; --accent:#7aa2ff; --bad:#f87171; --ok:#4ade80; }
+  /* Paper (light) */
+  :root {
+    --bg:#FAF8F4; --fg:#1F2328; --muted:#6B6A64; --line:#E2DED4; --card:#FFFFFF;
+    --accent:#0F6E56; --bad:#A32D2D; --bad-bg:#FCEBEB; --ok:#0F6E56;
+    --chip-bg:#E1F5EE; --chip-fg:#085041; --stat-bg:#F1EFE8;
   }
+  /* Night (automatic dark mode) */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#14161A; --fg:#E8EAED; --muted:#9AA0A6; --line:#2E333A; --card:#1C1F24;
+      --accent:#EF9F27; --bad:#F09595; --bad-bg:#3A1A1A; --ok:#5DCAA5;
+      --chip-bg:#3A2A10; --chip-fg:#FAC775; --stat-bg:#23272D;
+    }
+  }
+
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
-  h1 { margin:0 0 4px; font-size:28px; }
-  h2 { margin:8px 0; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:960px; margin:0 auto; padding:28px 16px 48px; }
+
+  .top { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .top h1 { margin:0; font-size:28px; font-weight:600; letter-spacing:-0.01em; }
+  .top h1 a { color:inherit; text-decoration:none; }
+  .top .about-link { color:var(--muted); text-decoration:none; font-size:15px; }
+  .top .about-link:hover { color:var(--fg); }
+  .tagline { margin:8px 0 2px; }
   .muted { color:var(--muted); font-size:14px; }
-  nav { display:flex; gap:20px; border-bottom:1px solid var(--line); margin:20px 0; overflow-x:auto; }
-  nav a { padding:8px 0; color:var(--muted); text-decoration:none; border-bottom:2px solid transparent; white-space:nowrap; }
-  nav a.active { color:var(--fg); border-color:var(--accent); }
-  input[type=search] { width:100%; padding:12px 14px; font-size:16px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); }
+  #view { margin-top:28px; }
+
+  h2 { margin:4px 0 8px; font-weight:600; }
+  h3 { font-weight:600; }
+  input[type=search] { width:100%; padding:13px 14px; font-size:16px; border:1px solid var(--line); border-radius:10px;
+                       background:var(--card); color:var(--fg); outline:none; }
+  input[type=search]:focus { border-color:var(--accent); }
   a.link, .results a { color:var(--accent); text-decoration:none; }
-  .results div { padding:8px 0; border-bottom:1px solid var(--line); }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin:16px 0; }
-  .stat { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .stat b { display:block; font-size:22px; }
+  a.link:hover, .results a:hover { text-decoration:underline; }
+  .results div { padding:10px 0; border-bottom:1px solid var(--line); }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin:16px 0; }
+  .stat { background:var(--stat-bg); border-radius:10px; padding:12px 14px; }
+  .stat b { display:block; font-size:22px; font-weight:600; }
   .stat span { color:var(--muted); font-size:13px; }
-  .table-wrap { overflow-x:auto; }
+  .stat.alert { background:var(--bad-bg); }
+  .stat.alert b, .stat.alert span { color:var(--bad); }
+
+  .table-wrap { overflow-x:auto; background:var(--card); border:1px solid var(--line); border-radius:10px; }
   table { width:100%; border-collapse:collapse; font-size:14px; }
-  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
   th { color:var(--muted); font-weight:600; }
   .open { color:var(--bad); font-weight:600; }
   .good { color:var(--ok); }
-  .note { font-size:13px; color:var(--muted); margin-top:8px; }
+  .note { font-size:13px; color:var(--muted); margin-top:10px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
-  .chip { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:4px 10px; font-size:13px; }
+  .chip { background:var(--chip-bg); color:var(--chip-fg); border-radius:999px; padding:4px 11px; font-size:13px; }
+
+  .about { max-width:680px; }
+  .about h3 { margin:28px 0 6px; font-size:17px; }
+  .about ol, .about ul { padding-left:20px; }
+  .about li { margin:6px 0; }
+
+  footer { max-width:960px; margin:0 auto; padding:16px 16px 40px; border-top:1px solid var(--line);
+           color:var(--muted); font-size:13px; display:flex; flex-wrap:wrap; gap:6px 16px; justify-content:space-between; }
+  footer a { color:var(--muted); }
 </style>
 </head>
 <body>
 <main>
-  <h1>🏠 Rental Records</h1>
-  <div>Look up any licensed rental in Minneapolis: its license, who owns it, and its history of city code violations.</div>
+  <header class="top">
+    <h1><a href="#">🏠 Rental Records</a></h1>
+    <a class="about-link" href="#about">About</a>
+  </header>
+  <div class="tagline">Check a Minneapolis rental before applying: its license, its condition record, and any open city code violations.</div>
   <div class="muted" id="updated">Loading data…</div>
-  <nav>
-    <a href="#" data-tab="search">Look up an address</a>
-    <a href="#owners" data-tab="owners">Largest owners</a>
-    <a href="#about" data-tab="about">About</a>
-  </nav>
   <section id="view"></section>
 </main>
+<footer>
+  <span>Public data from the City of Minneapolis. Not affiliated with the City or any housing authority.</span>
+  <a href="#about">About this project</a>
+</footer>
 
 <script>
-const state = { properties: [], owners: [], ownersByKey: new Map(), shards: new Map(), query: "" };
+const state = { properties: [], ownersByKey: new Map(), shards: new Map(), query: "" };
 const view = document.getElementById("view");
 
 // Escape text from the data so names can never be read as HTML
@@ -59,8 +96,9 @@ const esc = (s) => String(s ?? "—").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const num = (n, digits = 0) => n == null ? "—" :
   Number(n).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
-const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+const stat = (value, label, cls = "") => `<div class="stat ${cls}"><b>${value}</b><span>${label}</span></div>`;
 
+// Retries a few times, because large downloads occasionally get cut off
 async function loadJSON(path, attempts = 3) {
   for (let i = 1; ; i++) {
     try {
@@ -68,8 +106,8 @@ async function loadJSON(path, attempts = 3) {
       if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
       return await res.json();
     } catch (err) {
-      if (i >= attempts) throw err;                              // give up after the last try
-      await new Promise((resolve) => setTimeout(resolve, 500 * i)); // short pause, then retry
+      if (i >= attempts) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 500 * i));
     }
   }
 }
@@ -82,21 +120,15 @@ async function loadViolations(apn) {
   return state.shards.get(key)[apn] || [];
 }
 
-function setActiveTab(tab) {
-  document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.tab === tab));
-}
-
-// Each page has its own link (#p=..., #o=...), so the back button and shared links work
+// Each page has its own link (#p=..., #o=..., #about), so the back button and shared links work
 function route() {
   const hash = decodeURIComponent(location.hash.slice(1));
   const i = hash.indexOf("=");
   const kind = i === -1 ? hash : hash.slice(0, i);
   const value = i === -1 ? "" : hash.slice(i + 1);
-  setActiveTab(kind === "owners" || kind === "o" ? "owners" : kind === "about" ? "about" : "search");
   window.scrollTo(0, 0);
   if (kind === "p") return showProperty(value);
   if (kind === "o") return showOwner(value);
-  if (kind === "owners") return showOwners();
   if (kind === "about") return showAbout();
   return showSearch();
 }
@@ -129,7 +161,7 @@ function renderResults() {
     matches.map((p) => `
       <div>
         <a href="#p=${encodeURIComponent(p.license_number)}">${esc(p.address)}</a>
-        <span class="muted">· ${esc(p.owner_name)} · ${num(p.units)} units</span>
+        <span class="muted">· ${num(p.units)} units · ${num(p.violations_open)} open violations</span>
       </div>`).join("");
 }
 
@@ -140,23 +172,23 @@ async function showProperty(license) {
     return;
   }
   const owner = state.ownersByKey.get(p.owner_key);
-  const ownerLink = owner
+  const nameLink = owner
     ? `<a class="link" href="#o=${encodeURIComponent(p.owner_key)}">${esc(p.owner_name)}</a>
-       <span class="muted">(${num(owner.properties)} properties)</span>`
+       <span class="muted">(${num(owner.properties)} properties under this name)</span>`
     : esc(p.owner_name);
 
   view.innerHTML = `
     <p><a class="link" href="#">← Back to search</a></p>
     <h2>${esc(p.address)}</h2>
     <div class="stats">
+      ${stat(num(p.violations_open), "Open violations", p.violations_open > 0 ? "alert" : "")}
       ${stat(esc(p.tier), "License tier")}
       ${stat(num(p.units), "Units")}
-      ${stat(num(p.violations_open), "Open violations")}
       ${stat(num(p.violations_2yr), "Violations, last 2 years")}
       ${stat(num(p.violations_2yr_per_unit, 2), "Per unit, last 2 years")}
     </div>
     <p>
-      <b>Owner:</b> ${ownerLink}<br>
+      <b>Name on rental license:</b> ${nameLink}<br>
       <b>License:</b> ${esc(p.license_number)} · ${esc(p.status)} · expires ${esc(p.expiration_date)}<br>
       <b>Neighborhood:</b> ${esc(p.neighborhood)}
     </p>
@@ -201,20 +233,21 @@ function renderViolations(rows) {
 function showOwner(key) {
   const o = state.ownersByKey.get(key);
   if (!o) {
-    view.innerHTML = `<p>Owner not found. <a class="link" href="#owners">See largest owners</a></p>`;
+    view.innerHTML = `<p>Name not found. <a class="link" href="#">Back to search</a></p>`;
     return;
   }
   const props = state.properties
     .filter((p) => p.owner_key === key)
-    .sort((a, b) => (b.violations_2yr || 0) - (a.violations_2yr || 0));
+    .sort((a, b) => (b.violations_open || 0) - (a.violations_open || 0));
 
   view.innerHTML = `
-    <p><a class="link" href="#owners">← Largest owners</a></p>
+    <p><a class="link" href="#">← Back to search</a></p>
+    <div class="muted">Name on rental license</div>
     <h2>${esc(o.owner_name)}</h2>
     <div class="stats">
+      ${stat(num(o.violations_open), "Open violations", o.violations_open > 0 ? "alert" : "")}
       ${stat(num(o.properties), "Properties")}
       ${stat(num(o.units), "Units")}
-      ${stat(num(o.violations_open), "Open violations")}
       ${stat(num(o.violations_2yr_per_unit, 2), "Violations per unit, last 2 years")}
     </div>
     <div class="table-wrap"><table>
@@ -227,36 +260,65 @@ function showOwner(key) {
         </tr>`).join("")}
       </tbody>
     </table></div>
-    <p class="note">Owners are matched by the name on the rental license. One landlord may use several LLC names that are not yet grouped together.</p>`;
-}
-
-function showOwners() {
-  const top = state.owners.slice(0, 50);
-  view.innerHTML = `
-    <p>The largest rental owners in Minneapolis, by number of licensed units. Click a name to see their properties.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Owner</th><th>Properties</th><th>Units</th><th>Open violations</th><th>Per unit, last 2 yrs</th></tr></thead>
-      <tbody>${top.map((o) => `
-        <tr>
-          <td><a class="link" href="#o=${encodeURIComponent(o.owner_key)}">${esc(o.owner_name)}</a></td>
-          <td>${num(o.properties)}</td><td>${num(o.units)}</td>
-          <td>${num(o.violations_open)}</td><td>${num(o.violations_2yr_per_unit, 2)}</td>
-        </tr>`).join("")}
-      </tbody>
-    </table></div>`;
+    <p class="note">Properties are grouped by the name on the rental license, which is often a manager or contact
+    person rather than the legal owner. One landlord may also use several names that are not yet grouped together.</p>`;
 }
 
 function showAbout() {
   view.innerHTML = `
-    <p><b>What this is.</b> A free tool that brings Minneapolis public records about rental housing into one place,
-    so renters can check a property and its owner before signing a lease.</p>
-    <p><b>Data sources.</b> City of Minneapolis Open Data: Active Rental Licenses and code violation cases
-    (2016 to present). Updated weekly.</p>
-    <p><b>How to read it.</b> Violations include routine inspection findings, many of them minor. Open violations
-    and recent ones matter most. "Per unit" adjusts for building size, so large buildings and duplexes compare fairly.</p>
-    <p><b>Privacy.</b> Owner phone numbers and emails published by the city are left out on purpose.</p>
-    <p><b>Disclaimer.</b> This data comes from public records and may contain errors or be out of date.
-    It is not legal advice. Violations may predate the current owner.</p>`;
+    <div class="about">
+      <p><a class="link" href="#">← Back to search</a></p>
+      <h2>Why Rental Records exists</h2>
+
+      <p>Finding a home is hard. For families searching with a Housing Choice Voucher (Section 8), it can be much
+      harder. They are working against a deadline. The unit they choose has to pass an inspection before they can
+      move in. And they are often deciding on a home after seeing it for only a few minutes, with no way of knowing
+      how it has really been cared for.</p>
+
+      <p>The information that could help them already exists. The City of Minneapolis inspects rental homes and
+      records the problems it finds. But those records are spread across different city websites and written in
+      language that is hard to follow, especially for someone navigating the housing system for the first time.</p>
+
+      <p>Rental Records was built to close that gap. It brings a rental's public record together in one place and
+      explains it in plain language, so that renters, and especially voucher holders, can understand a home before
+      they apply. No one should have to spend an application fee, a long bus ride to a viewing, or precious days of
+      a voucher search on a place with problems they had no way of seeing.</p>
+
+      <h3>How it works</h3>
+      <ol>
+        <li><b>Searching an address</b> brings up the rental's license, its condition rating, and its record of
+        city code violations.</li>
+        <li><b>Open violations come first.</b> These are problems the city found that have not been fixed yet.
+        Problems inside the home, like heat, plumbing, or pests, and fire safety issues, like missing smoke
+        detectors, are the ones most worth asking a landlord about.</li>
+        <li><b>The last two years tell the most.</b> A building with many recent problems for its size is one that
+        deserves more questions.</li>
+        <li><b>The name on the license</b> links to every other building listed under that name, showing how a
+        landlord tends to care for their properties overall.</li>
+      </ol>
+
+      <h3>Reading the record fairly</h3>
+      <ul>
+        <li>Almost every building has some violations. Many come from routine city inspections and are minor.
+        A problem that was fixed years ago is not a red flag.</li>
+        <li>Large buildings naturally have more violations than small ones. Counting violations "per unit" keeps
+        the comparison fair.</li>
+        <li>Violations stay with the property, so some may date from before the current owner.</li>
+      </ul>
+
+      <h3>Renters' rights</h3>
+      <p>In Minneapolis, city law generally does not allow landlords to turn renters away simply because they use a
+      housing voucher. Renters with questions about their rights can contact <b>HOME Line</b>, which offers free,
+      confidential advice to renters across Minnesota. No one has to navigate this alone.</p>
+
+      <h3>Where the information comes from</h3>
+      <p>Everything on Rental Records comes from the City of Minneapolis's public records: rental licenses and more
+      than ten years of housing and fire inspection results, updated every week. The phone numbers and email
+      addresses the city publishes for license holders are intentionally left out.</p>
+
+      <p class="note">Rental Records is an independent project. It is not connected to the City of Minneapolis or
+      any housing authority, and it is not legal advice. Public records can contain mistakes or be out of date.</p>
+    </div>`;
 }
 
 async function init() {
@@ -267,10 +329,9 @@ async function init() {
       loadJSON("data/owners.json"),
     ]);
     state.properties = properties;
-    state.owners = owners;
     owners.forEach((o) => state.ownersByKey.set(o.owner_key, o));
     document.getElementById("updated").textContent =
-      `Data from the City of Minneapolis · last updated ${meta.last_updated}`;
+      `City of Minneapolis data · last updated ${meta.last_updated}`;
     window.addEventListener("hashchange", route);
     route();
   } catch (err) {
