@@ -2,3 +2,6 @@ venv/
 .env
 data/raw
 CLAUDE.local.md
+notebooks/
+__pycache__/
+*.pyc
