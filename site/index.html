@@ -61,10 +61,17 @@ const num = (n, digits = 0) => n == null ? "—" :
   Number(n).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const stat = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
 
-async function loadJSON(path) {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
-  return res.json();
+async function loadJSON(path, attempts = 3) {
+  for (let i = 1; ; i++) {
+    try {
+      const res = await fetch(path);
+      if (!res.ok) throw new Error(`Could not load ${path} (${res.status})`);
+      return await res.json();
+    } catch (err) {
+      if (i >= attempts) throw err;                              // give up after the last try
+      await new Promise((resolve) => setTimeout(resolve, 500 * i)); // short pause, then retry
+    }
+  }
 }
 
 async function loadViolations(apn) {
