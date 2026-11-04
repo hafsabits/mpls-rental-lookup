@@ -9,7 +9,7 @@ PAGE_SIZE = 2000  # the most records this server returns per request
 
 def _get(url: str, params: dict) -> dict:
     """Send one request and fail loudly on any error."""
-    response = requests.get(url, params=params, timeout=60)
+    response = requests.get(url, params=params, timeout=120)
     response.raise_for_status()  # stops on HTTP errors like 404 or 500
     data = response.json()
     if "error" in data:  # ArcGIS sometimes returns errors inside a 200 response
@@ -26,7 +26,7 @@ def get_count(layer_url: str) -> int:
     return data["count"]
 
 
-def fetch_all(layer_url: str, order_by: str = "OBJECTID", pause_seconds: float = 0.5) -> list[dict]:
+def fetch_all(layer_url: str, order_by: str = "OBJECTID", page_size: int = PAGE_SIZE, pause_seconds: float = 0.5) -> list[dict]:
     """Return every record in the layer as a list of dictionaries."""
     expected = get_count(layer_url)
     print(f"Server reports {expected:,} records")
@@ -42,7 +42,7 @@ def fetch_all(layer_url: str, order_by: str = "OBJECTID", pause_seconds: float =
                 "returnGeometry": "false",  # latitude/longitude are already regular fields
                 "orderByFields": order_by,  # stable order so pages don't overlap
                 "resultOffset": offset,
-                "resultRecordCount": PAGE_SIZE,
+                "resultRecordCount": page_size,
                 "f": "json",
             },
         )
